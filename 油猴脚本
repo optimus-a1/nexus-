@@ -1,0 +1,105 @@
+// ==UserScript==
+// @name         Nexus 自动检测并启动节点（带调试输出）
+// @namespace    http://tampermonkey.net
+// @version      1.0
+// @description  图标为灰色 + Cycles/s = 0 时自动点击启动按钮，并在页面显示调试状态信息
+// @match        https://app.nexus.xyz/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // 创建调试框
+    const debugBox = document.createElement('div');
+    Object.assign(debugBox.style, {
+        position: 'fixed',
+        bottom: '10px',
+        right: '10px',
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        color: '#00FF00',
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        padding: '10px',
+        maxHeight: '40%',
+        maxWidth: '35%',
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+        zIndex: 9999,
+        border: '1px solid lime',
+    });
+    document.body.appendChild(debugBox);
+
+    function log(msg) {
+        const now = new Date().toLocaleTimeString();
+        const line = `[${now}] ${msg}`;
+        debugBox.innerText = line + '\n' + debugBox.innerText;
+        console.log(line);
+    }
+
+    function isGrayIcon(img) {
+        if (!img) return false;
+        const filter = getComputedStyle(img).filter;
+        return filter.includes("brightness(0)") && filter.includes("invert(1)");
+    }
+
+    function getCyclesFromBottom() {
+        const containers = Array.from(document.querySelectorAll("div"))
+            .filter(div => div.innerText.trim() === "Cycles/s");
+        for (const label of containers) {
+            const parent = label.parentElement;
+            if (parent) {
+                const valueDiv = parent.querySelector("div");
+                if (valueDiv) {
+                    const val = valueDiv.innerText.trim();
+                    return /^\d+$/.test(val) ? parseInt(val) : null;
+                }
+            }
+        }
+        return null;
+    }
+
+    function simulateClick(elem) {
+        const rect = elem.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(type => {
+            elem.dispatchEvent(new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                clientX: x,
+                clientY: y,
+                buttons: 1
+            }));
+        });
+    }
+
+    function checkStatus() {
+        const icon = document.querySelector('img[src="/power-settings-icon.svg"]');
+        const isGray = icon && isGrayIcon(icon);
+        const cycles = getCyclesFromBottom();
+
+        const iconStatus = icon ? (isGray ? '🟡 灰色（未启动）' : '🔵 蓝色（已启动）') : '❌ 未找到图标';
+        const cyclesStatus = cycles === null ? '❌ 未获取到 Cycles/s' : `⚙️ Cycles/s = ${cycles}`;
+        const shouldStart = isGray && cycles === 0;
+
+        let summary = `🧪 Nexus 状态调试：
+${iconStatus}
+${cyclesStatus}
+状态判定：${shouldStart ? '🟥 未启动 → 准备点击' : '✅ 已启动或未知'}
+        `;
+
+        log(summary.trim());
+
+        // 如果满足启动条件，则点击按钮
+        if (shouldStart) {
+            const clickable = icon.closest('div, span') || icon;
+            simulateClick(clickable);
+            log('✅ 已点击启动按钮');
+        }
+    }
+
+    // 每 5 秒检查一次状态
+    setInterval(checkStatus, 5000);
+})();
