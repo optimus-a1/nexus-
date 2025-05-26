@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Nexus 自动检测并启动节点（带调试输出）
+// @name         Nexus 自动启动节点（含调试输出+定时刷新）
 // @namespace    http://tampermonkey.net
-// @version      1.0
-// @description  图标为灰色 + Cycles/s = 0 时自动点击启动按钮，并在页面显示调试状态信息
+// @version      1.1
+// @description  自动检测是否未启动（图标灰 + Cycles = 0）并点击；每10分钟刷新页面；带调试信息
 // @match        https://app.nexus.xyz/*
 // @grant        none
 // ==/UserScript==
@@ -92,7 +92,6 @@ ${cyclesStatus}
 
         log(summary.trim());
 
-        // 如果满足启动条件，则点击按钮
         if (shouldStart) {
             const clickable = icon.closest('div, span') || icon;
             simulateClick(clickable);
@@ -102,4 +101,11 @@ ${cyclesStatus}
 
     // 每 5 秒检查一次状态
     setInterval(checkStatus, 5000);
+
+    // 每 10 分钟自动刷新页面
+    setTimeout(() => {
+        log('🔁 到达 10 分钟，自动刷新页面');
+        location.reload();
+    }, 10 * 60 * 1000); // 10分钟 = 600000ms
+
 })();
